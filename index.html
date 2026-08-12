@@ -247,6 +247,7 @@
 <div class="chrome readout" id="readout">
   <div><span class="k">Epoch</span><span class="v" id="r-epoch">—</span></div>
   <div><span class="k">Subsolar</span><span class="v" id="r-sun">—</span></div>
+  <div><span class="k">Moon</span><span class="v" id="r-moon">—</span></div>
   <div><span class="k">Speed</span><span class="v" id="r-speed">×450</span></div>
   <div><span class="k">Objects</span><span class="v" id="r-count">—</span></div>
 </div>
@@ -297,12 +298,15 @@
   const MOON_DIST_VIS  = 20;                    // compressed for framing
   const MOON_RADIUS    = 0.273;                 // Earth radii
 
-  // Sun & Earth orientation, anchored to real UTC and refreshed every frame.
-  // World convention: +x = subsolar meridian at UTC noon, +y = north pole, +z = 90°E.
+  // Sun, Moon & Earth orientation — anchored to real UTC, refreshed every frame.
+  // World convention: +x = subsolar meridian, +y = north pole, +z = 90° east.
   const DEG = Math.PI / 180;
-  const SUN = { x: 1, y: 0, z: 0 };  // mutated by updateUtcState()
+  const EPS = 23.44 * DEG;   // Earth's obliquity
+  const SUN = { x: 1, y: 0, z: 0 };
   const SUN_DIST   = 300;
   const SUN_RADIUS = 3.5;
+  // MOON.x/y/z carry the moon's world-frame position (scaled to MOON_DIST_VIS)
+  const MOON = { x: 0, y: 0, z: MOON_DIST_VIS, dist_km: 384400, elong_deg: 0, illum: 0.5, waxing: true };
   let NOW_UTC        = new Date();
   let UTC_HOURS      = 12;
   let UTC_DOY        = 1;
@@ -310,21 +314,73 @@
   let SUBSOLAR_LON   = 0;
   let EARTH_SPIN_UTC = 0;
 
+  function normPi(a) {                       // wrap to (-π, π]
+    while (a >  Math.PI) a -= 2 * Math.PI;
+    while (a <= -Math.PI) a += 2 * Math.PI;
+    return a;
+  }
+
   function updateUtcState() {
     NOW_UTC = new Date();
     UTC_HOURS = NOW_UTC.getUTCHours() + NOW_UTC.getUTCMinutes()/60
               + NOW_UTC.getUTCSeconds()/3600 + NOW_UTC.getUTCMilliseconds()/3600000;
     const y0 = Date.UTC(NOW_UTC.getUTCFullYear(), 0, 0);
     UTC_DOY = Math.floor((NOW_UTC.getTime() - y0) / 86400000);
-    SOLAR_DECL = 23.44 * DEG * Math.sin(2 * Math.PI * (UTC_DOY - 81) / 365);
+
+    // Days since J2000 epoch (2000-01-01 12:00 UTC)
+    const d = (NOW_UTC.getTime() - Date.UTC(2000, 0, 1, 12, 0, 0)) / 86400000;
+
+    // --- Sun (Meeus low-precision) ---
+    const gSun = (357.528 + 0.9856003 * d) * DEG;
+    const lambdaSun = ((280.460 + 0.9856474 * d) * DEG)
+                    + 1.915 * DEG * Math.sin(gSun)
+                    + 0.020 * DEG * Math.sin(2 * gSun);
+    const sinLS = Math.sin(lambdaSun), cosLS = Math.cos(lambdaSun);
+    const sinE  = Math.sin(EPS),        cosE  = Math.cos(EPS);
+    SOLAR_DECL = Math.asin(sinE * sinLS);
+    const alphaSun = Math.atan2(cosE * sinLS, cosLS);
+
     SUN.x = Math.cos(SOLAR_DECL);
     SUN.y = Math.sin(SOLAR_DECL);
     SUN.z = 0;
+
     EARTH_SPIN_UTC = -(UTC_HOURS - 12) * Math.PI / 12;
     let l = 180 - 15 * UTC_HOURS;
     while (l > 180)  l -= 360;
     while (l <= -180) l += 360;
     SUBSOLAR_LON = l;
+
+    // --- Moon (largest-term geocentric approximation) ---
+    // Mean longitude, mean anomaly, argument of latitude
+    const Lm = (218.316 + 13.176396 * d) * DEG;
+    const Mm = (134.963 + 13.064993 * d) * DEG;
+    const Fm = ( 93.272 + 13.229350 * d) * DEG;
+    const lambdaMoon = Lm + 6.289 * DEG * Math.sin(Mm);
+    const betaMoon   = 5.128 * DEG * Math.sin(Fm);
+    const rMoonKm    = 385001 - 20905 * Math.cos(Mm);
+
+    const sinLM = Math.sin(lambdaMoon), cosLM = Math.cos(lambdaMoon);
+    const sinB  = Math.sin(betaMoon),   cosB  = Math.cos(betaMoon);
+    const deltaMoon = Math.asin(sinB * cosE + cosB * sinE * sinLM);
+    const alphaMoon = Math.atan2(sinLM * cosE - Math.tan(betaMoon) * sinE, cosLM);
+
+    // World frame is astronomical equatorial rotated so the sun sits at RA=0.
+    // Moon's world RA is therefore (α_moon − α_sun).
+    const dAlpha = normPi(alphaMoon - alphaSun);
+    const cosDM  = Math.cos(deltaMoon);
+    const distScale = MOON_DIST_VIS * (rMoonKm / 385000);
+    MOON.x = distScale * Math.cos(dAlpha) * cosDM;
+    MOON.y = distScale * Math.sin(deltaMoon);
+    MOON.z = distScale * Math.sin(dAlpha) * cosDM;
+    MOON.dist_km = rMoonKm;
+
+    // Elongation & phase (moon-sun angle as seen from Earth)
+    let elong = (lambdaMoon - lambdaSun);
+    while (elong <  0) elong += 2 * Math.PI;
+    while (elong >= 2 * Math.PI) elong -= 2 * Math.PI;
+    MOON.elong_deg = elong / DEG;
+    MOON.illum     = (1 - Math.cos(elong)) / 2;
+    MOON.waxing    = elong < Math.PI;
   }
   updateUtcState();  // seed before any consumer reads these
 
@@ -612,8 +668,7 @@
     maxDist: 55,
     fov: 55 * DEG,
   };
-  let earthSpin = EARTH_SPIN_UTC;   // start accurate to current UTC
-  let moonPhase = 0.9;              // moon orbit phase
+  let earthSpin = EARTH_SPIN_UTC;   // updated per frame from updateUtcState()
   let autoSpin = true;
   let exaggerate = true;
   const TIME_SPEEDS = [
@@ -759,9 +814,8 @@
   function render(dt) {
     simTime += dt * TIME_SPEED;
     if (autoSpin) cam.yaw += dt * 0.06;
-    updateUtcState();                        // refresh sun & Earth orientation from real UTC
+    updateUtcState();                        // refresh sun, moon & Earth orientation from real UTC
     earthSpin = EARTH_SPIN_UTC;              // Earth stays true to UTC (~15°/hr terminator drift)
-    moonPhase += dt * TIME_SPEED * 0.8;      // moon completes an orbit at a legible pace
 
     // Camera transform: rotate world by -yaw about Y, then -pitch about X
     const cy = Math.cos(-cam.yaw),  sy = Math.sin(-cam.yaw);
@@ -1114,18 +1168,8 @@
   }
 
   function drawMoon(r11, r12, r13, r21, r22, r23, r31, r32, r33, D, focal, cx, cyPix) {
-    // Moon position: orbit in a plane inclined 5° from equator
-    const mp = moonPhase;
-    const inc = 5.14 * DEG;
-    const raan = 0.7;
-    const cM = Math.cos(mp), sM = Math.sin(mp);
-    const ci = Math.cos(inc), si = Math.sin(inc);
-    const cr = Math.cos(raan), sr = Math.sin(raan);
-    const xo = MOON_DIST_VIS * cM;
-    const yo = MOON_DIST_VIS * sM;
-    const wx = cr * xo - sr * yo * ci;
-    const wy = sr * xo + cr * yo * ci;
-    const wz = yo * si;
+    // Moon position from real geocentric ephemeris (computed by updateUtcState).
+    const wx = MOON.x, wy = MOON.y, wz = MOON.z;
 
     const rx = r11*wx + r12*wy + r13*wz;
     const ry = r21*wx + r22*wy + r23*wz;
@@ -1214,6 +1258,12 @@
       const lonAbs = Math.abs(SUBSOLAR_LON).toFixed(1);
       const lonHem = SUBSOLAR_LON >= 0 ? 'E' : 'W';
       el.textContent = `${Math.abs(dec).toFixed(1)}°${hem} ${lonAbs}°${lonHem}`;
+    }
+    const elM = document.getElementById('r-moon');
+    if (elM) {
+      const pct = Math.round(MOON.illum * 100);
+      const dir = MOON.waxing ? 'wax' : 'wan';
+      elM.textContent = `${pct}% ${dir}`;
     }
   }
 
