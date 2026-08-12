@@ -754,6 +754,7 @@
   const projS = new Float32Array(N);   // pixel size
   const visible = new Uint8Array(N);
   const behind  = new Uint8Array(N);   // 1 = behind earth from cam
+  const night   = new Uint8Array(N);   // 1 = on Earth's night side (dot(pos, sun) < 0)
 
   function render(dt) {
     simTime += dt * TIME_SPEED;
@@ -868,14 +869,12 @@
       const scale = (focal / viewZ) * (1 / 250);
       let sz = SIZE[i] * (exaggerate ? 3.4 : 1.6) * (0.7 + scale * 4);
       if (BRIGHT[i]) sz *= 1.7;
-      // Slight dim on Earth's night side — satellites reflect sunlight.
-      // litDot = normalized sat position · sun direction; in [-1, 1].
-      const litDot = (wx * SUN.x + wy * SUN.y + wz * SUN.z) / a;
-      const litFactor = 0.86 + 0.14 * (litDot < -1 ? -1 : litDot > 1 ? 1 : litDot);
-      sz *= litFactor;
       // clamp
       if (sz < 0.6) sz = 0.6;
       if (sz > 6.0) sz = 6.0;
+      // Night-side flag — satellites reflect sunlight, so those on Earth's
+      // shadow side render dimmed in a second pass at lower alpha.
+      night[i] = ((wx * SUN.x + wy * SUN.y + wz * SUN.z) < 0) ? 1 : 0;
 
       projX[i] = sx;
       projY[i] = sy2;
@@ -906,7 +905,12 @@
   }
 
   function drawSats(farSide) {
-    // Iterate buckets to minimize fillStyle changes
+    // Two passes per color bucket: day at full alpha, night at ~18% alpha.
+    // Additive blending means globalAlpha directly modulates contribution,
+    // so night-side sats read as visibly dimmer even where rings are dense.
+
+    // ---- Night pass first (drawn under day for slightly cleaner overlap) ----
+    ctx.globalAlpha = 0.18;
     for (const c in colorBuckets) {
       const idxs = colorBuckets[c];
       ctx.fillStyle = c;
@@ -914,11 +918,28 @@
         const i = idxs[k];
         if (!visible[i]) continue;
         if (farSide ? !behind[i] : behind[i]) continue;
+        if (!night[i]) continue;
+        const sz = projS[i] * 0.85;   // slight size drop reinforces the dim
+        const x = projX[i] - sz * 0.5;
+        const y = projY[i] - sz * 0.5;
+        ctx.fillRect(x, y, sz, sz);
+      }
+    }
+
+    // ---- Day pass ----
+    ctx.globalAlpha = 1.0;
+    for (const c in colorBuckets) {
+      const idxs = colorBuckets[c];
+      ctx.fillStyle = c;
+      for (let k = 0; k < idxs.length; k++) {
+        const i = idxs[k];
+        if (!visible[i]) continue;
+        if (farSide ? !behind[i] : behind[i]) continue;
+        if (night[i]) continue;
         const sz = projS[i];
         const x = projX[i] - sz * 0.5;
         const y = projY[i] - sz * 0.5;
         ctx.fillRect(x, y, sz, sz);
-        // Bloom for bright objects
         if (BRIGHT[i]) {
           ctx.fillRect(x - sz*0.7, y + sz*0.15, sz*2.4, sz*0.7);
           ctx.fillRect(x + sz*0.15, y - sz*0.7, sz*0.7, sz*2.4);
