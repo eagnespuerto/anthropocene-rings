@@ -246,6 +246,7 @@
 
 <div class="chrome readout" id="readout">
   <div><span class="k">Epoch</span><span class="v" id="r-epoch">—</span></div>
+  <div><span class="k">Subsolar</span><span class="v" id="r-sun">—</span></div>
   <div><span class="k">Speed</span><span class="v" id="r-speed">×450</span></div>
   <div><span class="k">Objects</span><span class="v" id="r-count">—</span></div>
 </div>
@@ -296,6 +297,34 @@
   const MOON_DIST_VIS  = 20;                    // compressed for framing
   const MOON_RADIUS    = 0.273;                 // Earth radii
 
+  // Sun — direction fixed in world; declination + prime-meridian anchor from current UTC.
+  // World convention: +x = subsolar meridian at UTC noon, +y = north pole, +z = 90°E.
+  const DEG = Math.PI / 180;
+  const NOW_UTC = new Date();
+  const UTC_HOURS = NOW_UTC.getUTCHours() + NOW_UTC.getUTCMinutes()/60 + NOW_UTC.getUTCSeconds()/3600;
+  const UTC_DOY = (() => {
+    const y0 = Date.UTC(NOW_UTC.getUTCFullYear(), 0, 0);
+    return Math.floor((NOW_UTC.getTime() - y0) / 86400000);
+  })();
+  const SOLAR_DECL = 23.44 * DEG * Math.sin(2 * Math.PI * (UTC_DOY - 81) / 365);
+  const SUN = {
+    x: Math.cos(SOLAR_DECL),
+    y: Math.sin(SOLAR_DECL),
+    z: 0,
+  };
+  const SUN_DIST   = 300;   // far background
+  const SUN_RADIUS = 3.5;   // gives ~1.3° angular size — moon-sized, feels right
+  // Earth spin: prime meridian at +x world when UTC noon.
+  // earthSpin_utc(t) = -(UTC_h - 12) * π/12
+  const EARTH_SPIN_UTC = -(UTC_HOURS - 12) * Math.PI / 12;
+  // Subsolar geographic longitude (for readout only): 180 - 15*UTC_h, wrapped to (-180,180]
+  const SUBSOLAR_LON = (() => {
+    let l = 180 - 15 * UTC_HOURS;
+    while (l > 180)  l -= 360;
+    while (l <= -180) l += 360;
+    return l;
+  })();
+
   // Kepler rate: n = k / a^(3/2). Choose k so LEO (a≈1.09) does ~1 rev per second at speed=1
   // We'll scale globally by TIME_SPEED so the sim feels ~×450 real time.
   const K_RATE = 2 * Math.PI * 1.0; // radians/sec at a=1
@@ -303,7 +332,6 @@
 
   // ---------- Shell definitions ----------
   // Populations exaggerated ~2× for visibility on the ring plates.
-  const DEG = Math.PI / 180;
   const SHELLS = [
     // LEO — Starlink shells (multiple inclinations creates the banded appearance)
     { key:'sl1', name:'Starlink · 53°',   altKm:550, inc:53.0*DEG, count:1800, color:'#c2ccdb', size:0.55, groupKey:'leo-active' },
@@ -490,27 +518,84 @@
     }
   }
 
-  // Continent silhouette blobs (very rough — just visual texture on day side)
-  // Generated as random dark spots weighted to land latitudes.
-  const LAND_BLOBS = [];
-  const LAND_CENTERS = [
-    [45, -100, 22], [10, -70, 15], [-15, -60, 18],  // Americas
-    [50, 10, 14], [15, 20, 22], [-10, 25, 18], [0, 40, 14], // EU + Africa
-    [50, 90, 20], [30, 100, 22], [20, 80, 12],     // Asia
-    [-25, 133, 12],                                 // Australia
+  // ---------- Continents (low-detail silhouettes) ----------
+  // Coarse lat/lon polygons for the major landmasses. Non-detailed by design.
+  // Coordinates are [lat, lon] pairs, no antimeridian crossings.
+  const CONTINENTS = [
+    // Africa
+    [[36,-6],[35,10],[33,22],[31,32],[20,37],[13,43],[11,51],[-3,42],[-14,40],[-25,33],[-34,25],[-34,18],[-22,14],[-6,13],[5,10],[6,-9],[14,-17],[21,-17],[27,-13],[33,-9]],
+    // North America
+    [[71,-156],[72,-125],[70,-100],[74,-80],[60,-64],[46,-53],[44,-66],[35,-75],[32,-80],[25,-80],[24,-97],[18,-93],[18,-104],[21,-105],[30,-114],[33,-117],[40,-124],[48,-124],[58,-136],[60,-146],[60,-166],[66,-165]],
+    // South America
+    [[12,-72],[10,-62],[5,-52],[-5,-35],[-10,-35],[-22,-40],[-30,-49],[-38,-58],[-50,-68],[-55,-68],[-53,-73],[-35,-73],[-20,-70],[-8,-79],[0,-80],[8,-77]],
+    // Europe
+    [[36,-9],[43,-9],[45,-2],[50,-1],[55,-3],[60,5],[65,12],[70,25],[68,42],[45,42],[41,26],[40,15],[44,10]],
+    // Asia
+    [[44,42],[68,42],[73,58],[78,80],[78,105],[74,140],[62,163],[55,158],[48,142],[40,132],[32,120],[22,110],[10,105],[15,95],[20,90],[22,68],[30,50]],
+    // India subcontinent
+    [[28,72],[26,88],[22,92],[8,78],[8,73],[15,72],[22,68]],
+    // Southeast Asia peninsula
+    [[20,98],[15,108],[10,107],[3,102],[8,100],[15,97]],
+    // Australia
+    [[-12,130],[-12,142],[-20,152],[-38,148],[-38,140],[-35,117],[-20,113],[-15,125]],
+    // Greenland
+    [[82,-30],[78,-18],[70,-22],[60,-45],[75,-55],[82,-40]],
+    // British Isles
+    [[58,-5],[54,-2],[50,-1],[52,-5],[57,-8]],
+    // Madagascar
+    [[-12,49],[-25,47],[-25,44],[-16,44]],
+    // Japan
+    [[45,142],[38,141],[33,131],[34,135],[38,139]],
+    // Iceland
+    [[66,-14],[65,-24],[63,-19],[64,-13]],
+    // New Zealand N
+    [[-35,173],[-38,178],[-42,175],[-41,172]],
+    // New Zealand S
+    [[-41,171],[-45,171],[-47,167],[-42,168]],
+    // Indonesia (Sumatra + Java simplification)
+    [[6,95],[0,102],[-6,105],[-8,113],[-8,120],[-1,109],[3,100]],
+    // New Guinea
+    [[-1,131],[-2,141],[-5,146],[-10,150],[-10,141],[-4,134]],
   ];
-  for (const [clat, clon, sp] of LAND_CENTERS) {
-    const n = 55;
-    for (let i = 0; i < n; i++) {
-      const lat = clat + (Math.random() - 0.5) * sp * 1.6;
-      const lon = clon + (Math.random() - 0.5) * sp * 2.0;
-      const phi = lat * DEG, lam = lon * DEG;
+
+  function pointInPolygon(lat, lon, poly) {
+    let inside = false;
+    const n = poly.length;
+    for (let i = 0, j = n - 1; i < n; j = i++) {
+      const lati = poly[i][0], loni = poly[i][1];
+      const latj = poly[j][0], lonj = poly[j][1];
+      const intersect = ((loni > lon) !== (lonj > lon)) &&
+        (lat < (latj - lati) * (lon - loni) / (lonj - loni) + lati);
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }
+
+  function isLand(lat, lon) {
+    if (lat < -66) return true; // Antarctica cap
+    for (let i = 0; i < CONTINENTS.length; i++) {
+      if (pointInPolygon(lat, lon, CONTINENTS[i])) return true;
+    }
+    return false;
+  }
+
+  // Sample a lat/lon grid → keep only land points as precomputed unit-sphere vectors.
+  const LAND_POINTS = [];
+  const LAND_STEP = 1.6;   // degrees
+  for (let lat = -88; lat <= 88; lat += LAND_STEP) {
+    // Stagger longitude by half-step per row → nicer hex-ish coverage
+    const off = (Math.floor((lat + 88) / LAND_STEP) & 1) ? LAND_STEP * 0.5 : 0;
+    // Longitude spacing scaled by cos(lat) keeps roughly uniform surface density
+    const lonStep = LAND_STEP / Math.max(0.15, Math.cos(lat * DEG));
+    for (let lon = -180 + off; lon < 180; lon += lonStep) {
+      if (!isLand(lat, lon)) continue;
+      const phi = lat * DEG;
+      const lam = lon * DEG;
       const cp = Math.cos(phi);
-      LAND_BLOBS.push({
+      LAND_POINTS.push({
         x0: cp * Math.cos(lam),
         y0: Math.sin(phi),
         z0: cp * Math.sin(lam),
-        r:  0.03 + Math.random() * 0.05,
       });
     }
   }
@@ -524,8 +609,8 @@
     maxDist: 55,
     fov: 55 * DEG,
   };
-  let earthSpin = 0;    // Earth rotation phase
-  let moonPhase = 0.9;  // moon orbit phase
+  let earthSpin = EARTH_SPIN_UTC;   // start accurate to current UTC
+  let moonPhase = 0.9;              // moon orbit phase
   let autoSpin = true;
   let exaggerate = true;
   const TIME_SPEEDS = [
@@ -670,8 +755,8 @@
   function render(dt) {
     simTime += dt * TIME_SPEED;
     if (autoSpin) cam.yaw += dt * 0.06;
-    earthSpin += dt * TIME_SPEED * 0.0004;   // slower than sat motion for legibility
-    moonPhase += dt * TIME_SPEED * 0.0001;
+    earthSpin += dt * TIME_SPEED * 24;       // ~full rotation per 2 min wall clock at default
+    moonPhase += dt * TIME_SPEED * 0.8;      // moon completes an orbit at a legible pace
 
     // Camera transform: rotate world by -yaw about Y, then -pitch about X
     const cy = Math.cos(-cam.yaw),  sy = Math.sin(-cam.yaw);
@@ -687,6 +772,11 @@
     const D = cam.dist;                  // camera at (0,0,D) after rotating world
     const focal = (H * DPR * 0.5) / Math.tan(cam.fov * 0.5);
     const cx = W * DPR * 0.5, cyPix = H * DPR * 0.5;
+
+    // Rotation matrix R = Rx(-pitch) * Ry(-yaw)
+    const r11 = cy,      r12 = 0,   r13 = sy;
+    const r21 = sp*sy,   r22 = cp,  r23 = -sp*cy;
+    const r31 = -cp*sy,  r32 = sp,  r33 = cp*cy;
 
     // ---- Background void ----
     ctx.fillStyle = '#04060c';
@@ -713,15 +803,10 @@
     }
     ctx.globalCompositeOperation = 'source-over';
 
-    // ---- Compute satellite positions & projection ----
-    // Rotation matrix R = Rx(-pitch) * Ry(-yaw)
-    // r11 = cy         r12 = 0     r13 = sy
-    // r21 = sp*sy      r22 = cp    r23 = -sp*cy
-    // r31 = -cp*sy     r32 = sp    r33 = cp*cy
-    const r11 = cy,      r12 = 0,   r13 = sy;
-    const r21 = sp*sy,   r22 = cp,  r23 = -sp*cy;
-    const r31 = -cp*sy,  r32 = sp,  r33 = cp*cy;
+    // ---- Sun (far background, behind everything except stars) ----
+    drawSun(r11, r12, r13, r21, r22, r23, r31, r32, r33, D, focal, cx, cyPix);
 
+    // ---- Compute satellite positions & projection ----
     // Earth center in camera space is origin -> (0,0,0). Distance from camera = D.
     // Camera space: viewer looks toward -z (world moved so camera at (0,0,0), Earth at (0,0,-D))
     // We'll compute pworld -> pcam via: pcam.x = r11*x+r12*y+r13*z, etc, then pcam.z' = -D + rotZ
@@ -848,9 +933,8 @@
     ctx.arc(cx, cyPix, haloR, 0, Math.PI * 2);
     ctx.fill();
 
-    // Sun direction in world (fixed)
-    const sun = { x: 0.7, y: 0.25, z: 0.66 }; // normalized-ish
-    // Transform sun into camera-view frame
+    // Sun direction (UTC-derived, fixed in world)
+    const sun = SUN;
     const sxCam = r11*sun.x + r12*sun.y + r13*sun.z;
     const syCam = r21*sun.x + r22*sun.y + r23*sun.z;
     const szCam = r31*sun.x + r32*sun.y + r33*sun.z;
@@ -874,35 +958,30 @@
     ctx.fillStyle = base;
     ctx.fillRect(cx - rPix, cyPix - rPix, rPix * 2, rPix * 2);
 
-    // Continents — draw dark blobs on day side
-    // Apply Earth spin around Y
+    // Continents — draw low-detail silhouettes as small dark dots on day side.
+    // Apply Earth spin around Y.
     const es = earthSpin;
     const cesY = Math.cos(es), sesY = Math.sin(es);
+    // Point size scales with globe pixel radius so density stays roughly constant.
+    const dotSz = Math.max(1.0, rPix * 0.020);
 
-    ctx.fillStyle = 'rgba(24,44,32,0.55)';
-    for (let i = 0; i < LAND_BLOBS.length; i++) {
-      const b = LAND_BLOBS[i];
-      // spin around Y
-      const x1 = cesY * b.x0 + sesY * b.z0;
-      const y1 = b.y0;
-      const z1 = -sesY * b.x0 + cesY * b.z0;
-      // camera transform
+    ctx.fillStyle = 'rgba(30,58,42,0.85)';
+    for (let i = 0; i < LAND_POINTS.length; i++) {
+      const p = LAND_POINTS[i];
+      const x1 = cesY * p.x0 + sesY * p.z0;
+      const y1 = p.y0;
+      const z1 = -sesY * p.x0 + cesY * p.z0;
       const rx = r11*x1 + r12*y1 + r13*z1;
       const ry = r21*x1 + r22*y1 + r23*z1;
       const rz = r31*x1 + r32*y1 + r33*z1;
-      // Visible if rz > 0 (facing camera)
-      if (rz <= 0) continue;
-      // Day/night: dot with sun (in view space)
+      if (rz <= 0) continue; // back-face cull
       const dotSun = rx*sxCam + ry*syCam + rz*szCam;
-      if (dotSun < -0.1) continue; // only day side (with softness)
-      const dayness = Math.min(1, Math.max(0, dotSun + 0.15));
+      if (dotSun < -0.05) continue; // day side (with a small terminator softness)
+      const dayness = Math.min(1, dotSun + 0.15);
       const sxp = cx + (focal * rx / (D - rz));
       const syp = cyPix + (-focal * ry / (D - rz));
-      const rr = b.r * rPix * (0.9 + rz * 0.2);
-      ctx.globalAlpha = 0.35 * dayness;
-      ctx.beginPath();
-      ctx.arc(sxp, syp, rr, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.globalAlpha = 0.55 * dayness;
+      ctx.fillRect(sxp - dotSz*0.5, syp - dotSz*0.5, dotSz, dotSz);
     }
     ctx.globalAlpha = 1;
 
@@ -949,6 +1028,61 @@
     ctx.stroke();
   }
 
+  function drawSun(r11, r12, r13, r21, r22, r23, r31, r32, r33, D, focal, cx, cyPix) {
+    const wx = SUN.x * SUN_DIST, wy = SUN.y * SUN_DIST, wz = SUN.z * SUN_DIST;
+    const rx = r11*wx + r12*wy + r13*wz;
+    const ry = r21*wx + r22*wy + r23*wz;
+    const rz = r31*wx + r32*wy + r33*wz;
+    const viewZ = D - rz;
+    if (viewZ < 0.1) return;
+    const sxp = cx + focal * rx / viewZ;
+    const syp = cyPix - focal * ry / viewZ;
+    const rPix = focal * SUN_RADIUS / viewZ;
+
+    ctx.globalCompositeOperation = 'lighter';
+
+    // Outer corona / lens bloom
+    const coronaR = rPix * 14;
+    const corona = ctx.createRadialGradient(sxp, syp, rPix * 0.6, sxp, syp, coronaR);
+    corona.addColorStop(0.00, 'rgba(255,225,160,0.55)');
+    corona.addColorStop(0.10, 'rgba(255,205,120,0.32)');
+    corona.addColorStop(0.35, 'rgba(255,170,80,0.10)');
+    corona.addColorStop(1.00, 'rgba(255,140,60,0)');
+    ctx.fillStyle = corona;
+    ctx.beginPath();
+    ctx.arc(sxp, syp, coronaR, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Bright body
+    const body = ctx.createRadialGradient(sxp, syp, 0, sxp, syp, rPix);
+    body.addColorStop(0.00, '#ffffff');
+    body.addColorStop(0.55, '#fff0c0');
+    body.addColorStop(0.90, '#ffca6a');
+    body.addColorStop(1.00, '#ffa848');
+    ctx.fillStyle = body;
+    ctx.beginPath();
+    ctx.arc(sxp, syp, rPix, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.globalCompositeOperation = 'source-over';
+
+    // Discreet label if the disc is on screen and big enough
+    if (rPix > 2 && sxp > -50 && sxp < canvas.width + 50 && syp > -50 && syp < canvas.height + 50) {
+      ctx.font = `${10 * DPR}px JetBrains Mono, SF Mono, Menlo, Consolas, monospace`;
+      ctx.fillStyle = 'rgba(255,220,180,0.55)';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      const lx = sxp + rPix * 6;
+      ctx.fillText('SUN', lx, syp);
+      ctx.strokeStyle = 'rgba(255,220,180,0.22)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(sxp + rPix * 2.6, syp);
+      ctx.lineTo(lx - 4 * DPR, syp);
+      ctx.stroke();
+    }
+  }
+
   function drawMoon(r11, r12, r13, r21, r22, r23, r31, r32, r33, D, focal, cx, cyPix) {
     // Moon position: orbit in a plane inclined 5° from equator
     const mp = moonPhase;
@@ -973,8 +1107,8 @@
     const syp = cyPix - focal * ry / viewZ;
     const rPix = focal * MOON_RADIUS / viewZ;
 
-    // Sun for moon shading
-    const sun = { x: 0.7, y: 0.25, z: 0.66 };
+    // Sun for moon shading (UTC-derived)
+    const sun = SUN;
     const sxCam = r11*sun.x + r12*sun.y + r13*sun.z;
     const syCam = r21*sun.x + r22*sun.y + r23*sun.z;
     // The lit direction (projected): opposite of sun offset from moon center
@@ -1039,12 +1173,19 @@
   }
 
   function updateReadout() {
-    // Simulated epoch: start = 2026-08-12T00:00 UTC, advance by simTime seconds
-    const epoch0 = Date.UTC(2026, 7, 12, 0, 0, 0);
-    const d = new Date(epoch0 + simTime * 1000);
+    // Epoch starts at page-load UTC and advances by simTime seconds.
+    const d = new Date(NOW_UTC.getTime() + simTime * 1000);
     const iso = d.toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
     document.getElementById('r-epoch').textContent = iso;
     document.getElementById('r-speed').textContent = TIME_SPEEDS[speedIdx].label;
+    const el = document.getElementById('r-sun');
+    if (el) {
+      const dec = SOLAR_DECL / DEG;
+      const hem = dec >= 0 ? 'N' : 'S';
+      const lonAbs = Math.abs(SUBSOLAR_LON).toFixed(1);
+      const lonHem = SUBSOLAR_LON >= 0 ? 'E' : 'W';
+      el.textContent = `${Math.abs(dec).toFixed(1)}°${hem} ${lonAbs}°${lonHem}`;
+    }
   }
 
   // ---------- Loop ----------
