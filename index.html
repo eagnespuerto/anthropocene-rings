@@ -1,0 +1,1023 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="A live simulation of the metal we have accreted about the Earth, which is mainly composed of fourteen thousand catalogued satellites and fragments, sorted by shell and also drawn slightly larger than life so the rings resolve.">
+<meta name="color-scheme" content="dark">
+<meta property="og:title" content="Anthropocene Rings">
+<meta property="og:description" content="A live simulation of the metal we have accreted about the Earth.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%9B%B0%EF%B8%8F%3C/text%3E%3C/svg%3E">
+<title>Anthropocene Rings — a simulation of Earth's orbital envelope</title>
+<style>
+  :root {
+    --void:      #04060c;
+    --void-2:    #070b16;
+    --panel:     #0a1120;
+    --hairline:  #1a2336;
+    --hairline-2:#2a3549;
+    --ink:       #e8eef7;
+    --ink-dim:   #8a94a9;
+    --ink-mute:  #4a5468;
+    --brass:     #d0a95e;
+    --silver:    #c2ccdb;
+    --gold:      #dbb968;
+    --copper:    #c87a4a;
+    --cerulean:  #6cb4ff;
+    --amber:     #f2b04a;
+
+    --display: 'Didot','Bodoni 72','GT Sectra','Playfair Display',Georgia,'Times New Roman',serif;
+    --sans:    -apple-system,'Segoe UI','Helvetica Neue',Helvetica,Arial,sans-serif;
+    --mono:    'JetBrains Mono','SF Mono','IBM Plex Mono','Menlo',Consolas,monospace;
+  }
+
+  html, body {
+    margin: 0; padding: 0; height: 100%; width: 100%;
+    background: var(--void);
+    color: var(--ink);
+    font-family: var(--sans);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  #stage {
+    position: fixed; inset: 0;
+    background:
+      radial-gradient(ellipse at 50% 55%, #0a1428 0%, #05080f 55%, #02030a 100%);
+  }
+  canvas { display: block; width: 100%; height: 100%; cursor: grab; }
+  canvas.dragging { cursor: grabbing; }
+
+  /* ---------- Chrome overlays ---------- */
+  .chrome { position: fixed; z-index: 5; pointer-events: none; }
+  .chrome > * { pointer-events: auto; }
+
+  .plate-title {
+    top: 22px; left: 28px; right: 28px;
+    display: flex; align-items: baseline; gap: 18px;
+    letter-spacing: .02em;
+  }
+  .plate-title h1 {
+    font-family: var(--display);
+    font-weight: 400;
+    font-size: clamp(22px, 2.4vw, 34px);
+    margin: 0;
+    letter-spacing: .01em;
+    color: var(--ink);
+  }
+  .plate-title h1 em {
+    font-style: italic; color: var(--brass); font-weight: 400;
+  }
+  .plate-title .rule {
+    flex: 1; height: 1px; background: var(--hairline-2);
+    margin: 0 6px; align-self: center;
+  }
+  .plate-title .meta {
+    font-family: var(--mono);
+    font-size: 10.5px; letter-spacing: .18em; text-transform: uppercase;
+    color: var(--ink-dim);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .caption {
+    position: fixed; top: 62px; left: 28px; z-index: 5;
+    font-family: var(--display); font-style: italic;
+    font-size: 14px; color: var(--ink-dim);
+    max-width: 46ch; line-height: 1.5;
+    letter-spacing: .005em;
+  }
+
+  /* Bottom-left legend */
+  .legend {
+    position: fixed; left: 28px; bottom: 24px; z-index: 5;
+    min-width: 300px;
+    padding: 14px 16px 12px;
+    background: linear-gradient(180deg, rgba(10,17,32,.72), rgba(10,17,32,.58));
+    border: 1px solid var(--hairline);
+    border-radius: 2px;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+  }
+  .legend h2 {
+    margin: 0 0 10px;
+    font-family: var(--mono);
+    font-size: 10px; letter-spacing: .22em; text-transform: uppercase;
+    color: var(--ink-dim); font-weight: 500;
+  }
+  .legend .row {
+    display: grid; grid-template-columns: 12px 1fr auto auto;
+    gap: 10px; align-items: baseline;
+    padding: 3px 0;
+    font-size: 12px;
+  }
+  .legend .row + .row { border-top: 1px dotted rgba(255,255,255,.05); }
+  .legend .swatch {
+    width: 8px; height: 8px; border-radius: 50%;
+    align-self: center; box-shadow: 0 0 6px currentColor;
+  }
+  .legend .name { color: var(--ink); letter-spacing: .01em; }
+  .legend .alt  { font-family: var(--mono); font-size: 10.5px; color: var(--ink-mute); font-variant-numeric: tabular-nums; }
+  .legend .count{ font-family: var(--mono); font-size: 11px; color: var(--ink-dim); font-variant-numeric: tabular-nums; min-width: 5ch; text-align: right; }
+
+  .legend .footer {
+    margin-top: 10px; padding-top: 8px;
+    border-top: 1px solid var(--hairline);
+    display: flex; justify-content: space-between;
+    font-family: var(--mono); font-size: 10px;
+    letter-spacing: .16em; text-transform: uppercase;
+    color: var(--ink-mute);
+  }
+  .legend .footer strong { color: var(--ink-dim); font-weight: 500; }
+
+  /* Bottom-right controls */
+  .controls {
+    position: fixed; right: 28px; bottom: 24px; z-index: 5;
+    display: flex; flex-direction: column; gap: 8px;
+    align-items: flex-end;
+  }
+  .btn {
+    font-family: var(--mono);
+    font-size: 10.5px; letter-spacing: .18em; text-transform: uppercase;
+    color: var(--ink-dim);
+    background: rgba(10,17,32,.72);
+    border: 1px solid var(--hairline);
+    padding: 8px 14px;
+    cursor: pointer;
+    transition: color .15s, border-color .15s, background .15s;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+  }
+  .btn:hover { color: var(--ink); border-color: var(--hairline-2); }
+  .btn.on    { color: var(--brass); border-color: var(--brass); background: rgba(208,169,94,.06); }
+  .btn kbd   { font-family: var(--mono); font-size: 9px; color: var(--ink-mute); margin-left: 8px; letter-spacing: 0; }
+
+  /* Top-right readout */
+  .readout {
+    position: fixed; right: 28px; top: 22px; z-index: 5;
+    text-align: right;
+    font-family: var(--mono);
+    font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--ink-dim);
+    line-height: 1.7;
+    font-variant-numeric: tabular-nums;
+  }
+  .readout .k { color: var(--ink-mute); margin-right: 8px; }
+  .readout .v { color: var(--ink); }
+
+  /* corner ticks */
+  .corner {
+    position: fixed; z-index: 4; width: 14px; height: 14px;
+    border-color: var(--hairline-2); pointer-events: none;
+  }
+  .corner.tl { top: 14px; left: 14px; border-top: 1px solid; border-left: 1px solid; }
+  .corner.tr { top: 14px; right: 14px; border-top: 1px solid; border-right: 1px solid; }
+  .corner.bl { bottom: 14px; left: 14px; border-bottom: 1px solid; border-left: 1px solid; }
+  .corner.br { bottom: 14px; right: 14px; border-bottom: 1px solid; border-right: 1px solid; }
+
+  .hint {
+    position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%);
+    z-index: 5;
+    font-family: var(--mono); font-size: 10px; letter-spacing: .22em;
+    text-transform: uppercase; color: var(--ink-mute);
+    opacity: 1; transition: opacity 1.2s ease 2s;
+    pointer-events: none;
+  }
+  .hint.faded { opacity: 0; }
+
+  @media (max-width: 720px) {
+    .plate-title { top: 16px; left: 18px; right: 18px; }
+    .caption { top: 54px; left: 18px; font-size: 13px; }
+    .legend { left: 14px; right: 14px; bottom: 14px; min-width: 0; }
+    .controls { right: 14px; bottom: auto; top: 60px; }
+    .readout { display: none; }
+  }
+</style>
+</head><body>
+
+<div id="stage">
+  <canvas id="c"></canvas>
+</div>
+
+<div class="corner tl"></div>
+<div class="corner tr"></div>
+<div class="corner bl"></div>
+<div class="corner br"></div>
+
+<div class="chrome plate-title">
+  <h1>Anthropocene <em>Rings</em></h1>
+  <span class="rule"></span>
+  <span class="meta">Plate I &nbsp;·&nbsp; Rev 2026.08</span>
+</div>
+<div class="caption">
+  A live simulation of the metal we have accreted about the Earth &mdash;
+  fourteen thousand catalogued satellites and fragments, sorted by shell,
+  drawn slightly larger than life so the rings resolve.
+</div>
+
+<div class="chrome readout" id="readout">
+  <div><span class="k">Epoch</span><span class="v" id="r-epoch">—</span></div>
+  <div><span class="k">Speed</span><span class="v" id="r-speed">×450</span></div>
+  <div><span class="k">Objects</span><span class="v" id="r-count">—</span></div>
+</div>
+
+<div class="chrome legend" id="legend">
+  <h2>Orbital regimes</h2>
+  <!-- injected -->
+  <div class="footer">
+    <span>Kepler <strong>circular</strong></span>
+    <span>Alt · <strong>km</strong></span>
+  </div>
+</div>
+
+<div class="chrome controls">
+  <button class="btn on" id="btn-exagg" title="Enlarge points">Exaggerate <kbd>E</kbd></button>
+  <button class="btn on" id="btn-spin"  title="Auto-rotate">Auto-orbit <kbd>Space</kbd></button>
+  <button class="btn"    id="btn-time"  title="Time acceleration">Time ×450 <kbd>T</kbd></button>
+  <button class="btn"    id="btn-reset" title="Reset view">Reset view <kbd>R</kbd></button>
+</div>
+
+<div class="hint" id="hint">Drag to rotate &nbsp;·&nbsp; Scroll to zoom</div>
+
+<script>
+(() => {
+  'use strict';
+
+  // ---------- Canvas & sizing ----------
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d', { alpha: false });
+  let W = 0, H = 0, DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+
+  function resize() {
+    DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    W = window.innerWidth; H = window.innerHeight;
+    canvas.width = Math.round(W * DPR);
+    canvas.height = Math.round(H * DPR);
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  // ---------- Constants (Earth-radii units) ----------
+  const R_EARTH_KM = 6371;
+  const kmToUnit = km => 1 + km / R_EARTH_KM;
+  const MOON_DIST_REAL = 384400 / R_EARTH_KM;   // ≈ 60.3
+  const MOON_DIST_VIS  = 20;                    // compressed for framing
+  const MOON_RADIUS    = 0.273;                 // Earth radii
+
+  // Kepler rate: n = k / a^(3/2). Choose k so LEO (a≈1.09) does ~1 rev per second at speed=1
+  // We'll scale globally by TIME_SPEED so the sim feels ~×450 real time.
+  const K_RATE = 2 * Math.PI * 1.0; // radians/sec at a=1
+  let TIME_SPEED = 0.0022;          // scales K_RATE => at 1 the numbers below match "real seconds"
+
+  // ---------- Shell definitions ----------
+  // Populations exaggerated ~2× for visibility on the ring plates.
+  const DEG = Math.PI / 180;
+  const SHELLS = [
+    // LEO — Starlink shells (multiple inclinations creates the banded appearance)
+    { key:'sl1', name:'Starlink · 53°',   altKm:550, inc:53.0*DEG, count:1800, color:'#c2ccdb', size:0.55, groupKey:'leo-active' },
+    { key:'sl2', name:'Starlink · 70°',   altKm:570, inc:70.0*DEG, count:900,  color:'#c2ccdb', size:0.55, groupKey:'leo-active' },
+    { key:'sl3', name:'Starlink · 97.6°', altKm:560, inc:97.6*DEG, count:700,  color:'#c2ccdb', size:0.55, groupKey:'leo-active' },
+    { key:'sl4', name:'Starlink v2 · 43°',altKm:540, inc:43.0*DEG, count:800,  color:'#c2ccdb', size:0.55, groupKey:'leo-active' },
+
+    // OneWeb polar shell
+    { key:'ow',  name:'OneWeb · 87.9°',   altKm:1200, inc:87.9*DEG, count:650, color:'#a9c4e6', size:0.5, groupKey:'leo-active' },
+
+    // Iridium & other comms
+    { key:'ir',  name:'Iridium',          altKm:780,  inc:86.4*DEG, count:75,  color:'#b8c9de', size:0.5, groupKey:'leo-active' },
+
+    // Mixed LEO scientific & recon (varied inclinations)
+    { key:'leo', name:'LEO (mixed)',      altKm:600,  inc:'mix',    count:900, color:'#9fb0c8', size:0.4, groupKey:'leo-active' },
+
+    // ISS-like (single bright point)
+    { key:'iss', name:'ISS / crewed',     altKm:408,  inc:51.6*DEG, count:4,   color:'#ffd07a', size:2.2, groupKey:'crewed', bright:true },
+
+    // Debris cloud LEO — the anthropogenic fog
+    { key:'dbg', name:'Debris fog',       altKm:'leo-mix', inc:'mix', count:5200, color:'#4d5a70', size:0.25, groupKey:'debris' },
+
+    // MEO — GNSS
+    { key:'gps', name:'GPS',              altKm:20200, inc:55*DEG,   count:31, color:'#dbb968', size:0.8, groupKey:'meo' },
+    { key:'glo', name:'GLONASS',          altKm:19130, inc:64.8*DEG, count:24, color:'#dbb968', size:0.8, groupKey:'meo' },
+    { key:'gal', name:'Galileo',          altKm:23222, inc:56*DEG,   count:28, color:'#c9a95c', size:0.8, groupKey:'meo' },
+    { key:'bei', name:'BeiDou MEO',       altKm:21528, inc:55*DEG,   count:24, color:'#c9a95c', size:0.8, groupKey:'meo' },
+
+    // GEO — the brass ring
+    { key:'geoA',name:'GEO active',       altKm:35786, inc:0.1*DEG,  count:600, color:'#d0a95e', size:0.75, groupKey:'geo' },
+    { key:'geoG',name:'Graveyard belt',   altKm:36086, inc:0.1*DEG,  count:400, color:'#8a6b3a', size:0.55, groupKey:'geo' },
+
+    // Molniya / HEO (elliptical proxy: high circular for cheap render)
+    { key:'mol', name:'Molniya / HEO',    altKm:26000, inc:63.4*DEG, count:110, color:'#c87a4a', size:0.6, groupKey:'heo' },
+
+    // Lunar / cislunar
+    { key:'lun', name:'Cislunar',         altKm:'moon-adjacent', inc:'mix', count:6, color:'#e6d2a8', size:1.4, groupKey:'lunar', bright:true },
+  ];
+
+  // Legend groupings (aggregate rows)
+  const LEG_GROUPS = [
+    { key:'leo-active', label:'LEO — comms & imaging',       color:'#c2ccdb', altText:'350–1200' },
+    { key:'crewed',     label:'Crewed stations',              color:'#ffd07a', altText:'≈400' },
+    { key:'debris',     label:'LEO debris & fragments',       color:'#4d5a70', altText:'300–1500' },
+    { key:'meo',        label:'MEO — GNSS constellations',    color:'#dbb968', altText:'≈20 000' },
+    { key:'geo',        label:'GEO — geostationary ring',     color:'#d0a95e', altText:'35 786' },
+    { key:'heo',        label:'HEO — Molniya / eccentric',    color:'#c87a4a', altText:'≈26 000' },
+    { key:'lunar',      label:'Cislunar craft',               color:'#e6d2a8', altText:'≈384 000' },
+  ];
+
+  // ---------- Build satellite catalog ----------
+  // Precompute per-satellite: a, inc, raan, M0, n, color, size, bright
+  function rand(min, max) { return min + Math.random() * (max - min); }
+  function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+  const sats = [];
+  const groupCounts = {};
+
+  for (const s of SHELLS) {
+    for (let i = 0; i < s.count; i++) {
+      // altitude
+      let a;
+      if (s.altKm === 'leo-mix') {
+        a = kmToUnit(rand(350, 1500));
+      } else if (s.altKm === 'moon-adjacent') {
+        // sprinkled around lunar distance for cislunar feel
+        a = MOON_DIST_VIS * rand(0.85, 1.15);
+      } else {
+        // small altitude jitter so shells have thickness
+        const jitter = (s.altKm > 30000) ? 40 : (s.altKm > 15000) ? 120 : 20;
+        a = kmToUnit(s.altKm + rand(-jitter, jitter));
+      }
+      // inclination
+      let inc;
+      if (s.inc === 'mix') {
+        // realistic bias: mostly 30–100°, some polar
+        const r = Math.random();
+        if (r < 0.15) inc = rand(0, 25) * DEG;
+        else if (r < 0.55) inc = rand(45, 75) * DEG;
+        else if (r < 0.85) inc = rand(75, 105) * DEG;
+        else inc = rand(25, 55) * DEG;
+      } else {
+        inc = s.inc + rand(-0.6, 0.6) * DEG;
+      }
+      const raan = rand(0, 2 * Math.PI);
+      const M0   = rand(0, 2 * Math.PI);
+      const n    = K_RATE / Math.pow(a, 1.5);
+
+      sats.push({
+        a, inc, raan, M0, n,
+        color: s.color,
+        size:  s.size,
+        bright: !!s.bright,
+        group: s.groupKey,
+      });
+      groupCounts[s.groupKey] = (groupCounts[s.groupKey] || 0) + 1;
+    }
+  }
+
+  // Pack into typed arrays for speed
+  const N = sats.length;
+  const A     = new Float32Array(N);
+  const INC   = new Float32Array(N);
+  const RAAN  = new Float32Array(N);
+  const M0    = new Float32Array(N);
+  const NRATE = new Float32Array(N);
+  const SIZE  = new Float32Array(N);
+  const BRIGHT= new Uint8Array(N);
+  const COLOR = new Array(N);
+  // Precompute sin/cos of inc & raan
+  const CI = new Float32Array(N), SI = new Float32Array(N);
+  const CR = new Float32Array(N), SR = new Float32Array(N);
+  for (let i = 0; i < N; i++) {
+    A[i]     = sats[i].a;
+    INC[i]   = sats[i].inc;
+    RAAN[i]  = sats[i].raan;
+    M0[i]    = sats[i].M0;
+    NRATE[i] = sats[i].n;
+    SIZE[i]  = sats[i].size;
+    BRIGHT[i]= sats[i].bright ? 1 : 0;
+    COLOR[i] = sats[i].color;
+    CI[i]    = Math.cos(sats[i].inc);
+    SI[i]    = Math.sin(sats[i].inc);
+    CR[i]    = Math.cos(sats[i].raan);
+    SR[i]    = Math.sin(sats[i].raan);
+  }
+  // Bucket indices by color for batched drawing
+  const colorBuckets = {};
+  for (let i = 0; i < N; i++) {
+    const c = COLOR[i];
+    (colorBuckets[c] = colorBuckets[c] || []).push(i);
+  }
+
+  // ---------- Stars ----------
+  const STARS = [];
+  for (let i = 0; i < 900; i++) {
+    STARS.push({
+      x: Math.random() * 2 - 1,
+      y: Math.random() * 2 - 1,
+      m: Math.pow(Math.random(), 3),   // magnitude bias
+      t: Math.random() * Math.PI * 2,  // twinkle phase
+    });
+  }
+
+  // ---------- City lights (night-side amber dots) ----------
+  // Hand-tuned cluster centers (lat°, lon°, spread°, weight)
+  const CITY_CLUSTERS = [
+    [40, -95, 18, 1.0], // North America (US midwest)
+    [37, -122, 4, .6],  // California
+    [40, -74, 3, .8],   // NYC
+    [50, 10, 12, 1.0],  // Europe
+    [51, 0, 3, .6],     // UK
+    [35, 105, 18, 1.2], // China
+    [35, 139, 3, .8],   // Tokyo
+    [22, 78, 14, 1.0],  // India
+    [30, 31, 4, .5],    // Cairo
+    [25, 55, 6, .5],    // Gulf
+    [-23, -46, 10, .7], // Brazil coast
+    [-33, 18, 4, .3],   // Cape Town
+    [-33, 151, 3, .4],  // Sydney
+    [1, 103, 3, .3],    // Singapore
+    [55, 37, 6, .5],    // Moscow
+    [41, 29, 4, .3],    // Istanbul
+    [19, -99, 4, .5],   // Mexico City
+    [-34, -58, 3, .3],  // Buenos Aires
+    [6, 3, 5, .3],      // Lagos
+  ];
+  const CITIES = [];
+  for (const [clat, clon, spread, w] of CITY_CLUSTERS) {
+    const n = Math.round(60 * w);
+    for (let i = 0; i < n; i++) {
+      const lat = clat + (Math.random() - 0.5) * spread * 2;
+      const lon = clon + (Math.random() - 0.5) * spread * 2;
+      const phi = lat * DEG;
+      const lam = lon * DEG;
+      const r = 1.0;
+      const cp = Math.cos(phi);
+      CITIES.push({
+        x0: r * cp * Math.cos(lam),
+        y0: r * Math.sin(phi),
+        z0: r * cp * Math.sin(lam),
+        i:  0.5 + Math.random() * 0.5,
+      });
+    }
+  }
+
+  // Continent silhouette blobs (very rough — just visual texture on day side)
+  // Generated as random dark spots weighted to land latitudes.
+  const LAND_BLOBS = [];
+  const LAND_CENTERS = [
+    [45, -100, 22], [10, -70, 15], [-15, -60, 18],  // Americas
+    [50, 10, 14], [15, 20, 22], [-10, 25, 18], [0, 40, 14], // EU + Africa
+    [50, 90, 20], [30, 100, 22], [20, 80, 12],     // Asia
+    [-25, 133, 12],                                 // Australia
+  ];
+  for (const [clat, clon, sp] of LAND_CENTERS) {
+    const n = 55;
+    for (let i = 0; i < n; i++) {
+      const lat = clat + (Math.random() - 0.5) * sp * 1.6;
+      const lon = clon + (Math.random() - 0.5) * sp * 2.0;
+      const phi = lat * DEG, lam = lon * DEG;
+      const cp = Math.cos(phi);
+      LAND_BLOBS.push({
+        x0: cp * Math.cos(lam),
+        y0: Math.sin(phi),
+        z0: cp * Math.sin(lam),
+        r:  0.03 + Math.random() * 0.05,
+      });
+    }
+  }
+
+  // ---------- Camera ----------
+  const cam = {
+    yaw:   -0.6,        // around Y (world up)
+    pitch:  0.35,       // around X
+    dist:  32,          // camera distance in Earth radii
+    minDist: 3.2,
+    maxDist: 55,
+    fov: 55 * DEG,
+  };
+  let earthSpin = 0;    // Earth rotation phase
+  let moonPhase = 0.9;  // moon orbit phase
+  let autoSpin = true;
+  let exaggerate = true;
+  const TIME_SPEEDS = [
+    { mult: 0.0005, label: '×100' },
+    { mult: 0.0022, label: '×450' },
+    { mult: 0.008,  label: '×1600' },
+    { mult: 0.03,   label: '×6000' },
+  ];
+  let speedIdx = 1;
+
+  // ---------- Interaction ----------
+  let dragging = false, lastX = 0, lastY = 0;
+  canvas.addEventListener('pointerdown', e => {
+    dragging = true; lastX = e.clientX; lastY = e.clientY;
+    canvas.classList.add('dragging');
+    canvas.setPointerCapture(e.pointerId);
+    hideHint();
+  });
+  canvas.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    const dx = e.clientX - lastX, dy = e.clientY - lastY;
+    lastX = e.clientX; lastY = e.clientY;
+    cam.yaw   -= dx * 0.005;
+    cam.pitch -= dy * 0.005;
+    const lim = Math.PI / 2 - 0.05;
+    if (cam.pitch >  lim) cam.pitch =  lim;
+    if (cam.pitch < -lim) cam.pitch = -lim;
+    autoSpin = false; syncSpinBtn();
+  });
+  canvas.addEventListener('pointerup', e => {
+    dragging = false; canvas.classList.remove('dragging');
+  });
+  canvas.addEventListener('wheel', e => {
+    e.preventDefault();
+    const f = Math.exp(e.deltaY * 0.001);
+    cam.dist *= f;
+    if (cam.dist < cam.minDist) cam.dist = cam.minDist;
+    if (cam.dist > cam.maxDist) cam.dist = cam.maxDist;
+    hideHint();
+  }, { passive: false });
+
+  // Touch pinch zoom
+  let pinchStart = null;
+  canvas.addEventListener('touchstart', e => {
+    if (e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      pinchStart = { dist: Math.hypot(dx, dy), cam: cam.dist };
+    }
+  }, { passive: true });
+  canvas.addEventListener('touchmove', e => {
+    if (e.touches.length === 2 && pinchStart) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const d = Math.hypot(dx, dy);
+      cam.dist = pinchStart.cam * (pinchStart.dist / d);
+      if (cam.dist < cam.minDist) cam.dist = cam.minDist;
+      if (cam.dist > cam.maxDist) cam.dist = cam.maxDist;
+      e.preventDefault();
+    }
+  }, { passive: false });
+
+  // Buttons
+  const btnExagg = document.getElementById('btn-exagg');
+  const btnSpin  = document.getElementById('btn-spin');
+  const btnTime  = document.getElementById('btn-time');
+  const btnReset = document.getElementById('btn-reset');
+
+  btnExagg.addEventListener('click', () => { exaggerate = !exaggerate; btnExagg.classList.toggle('on', exaggerate); });
+  btnSpin.addEventListener('click',  () => { autoSpin = !autoSpin; syncSpinBtn(); });
+  btnTime.addEventListener('click',  () => {
+    speedIdx = (speedIdx + 1) % TIME_SPEEDS.length;
+    TIME_SPEED = TIME_SPEEDS[speedIdx].mult;
+    btnTime.textContent = 'Time ' + TIME_SPEEDS[speedIdx].label;
+    btnTime.appendChild(Object.assign(document.createElement('kbd'), { textContent: 'T' }));
+    document.getElementById('r-speed').textContent = TIME_SPEEDS[speedIdx].label;
+  });
+  btnReset.addEventListener('click', () => {
+    cam.yaw = -0.6; cam.pitch = 0.35; cam.dist = 32;
+    autoSpin = true; syncSpinBtn();
+  });
+  function syncSpinBtn() { btnSpin.classList.toggle('on', autoSpin); }
+
+  window.addEventListener('keydown', e => {
+    if (e.key === 'e' || e.key === 'E') btnExagg.click();
+    if (e.key === ' ') { e.preventDefault(); btnSpin.click(); }
+    if (e.key === 't' || e.key === 'T') btnTime.click();
+    if (e.key === 'r' || e.key === 'R') btnReset.click();
+  });
+
+  // Hint fade
+  const hintEl = document.getElementById('hint');
+  let hintHidden = false;
+  function hideHint() {
+    if (hintHidden) return;
+    hintHidden = true;
+    hintEl.classList.add('faded');
+    setTimeout(() => hintEl.remove(), 2400);
+  }
+  setTimeout(hideHint, 6500);
+
+  // ---------- Build legend ----------
+  (function buildLegend() {
+    const legend = document.getElementById('legend');
+    const frag = document.createDocumentFragment();
+    const heading = legend.querySelector('h2');
+    for (const g of LEG_GROUPS) {
+      const row = document.createElement('div');
+      row.className = 'row';
+      const cnt = groupCounts[g.key] || 0;
+      row.innerHTML = `
+        <span class="swatch" style="background:${g.color}; color:${g.color}"></span>
+        <span class="name">${g.label}</span>
+        <span class="alt">${g.altText}</span>
+        <span class="count">${cnt.toLocaleString()}</span>
+      `;
+      frag.appendChild(row);
+    }
+    heading.after(frag);
+    document.getElementById('r-count').textContent = N.toLocaleString();
+  })();
+
+  // ---------- Rendering ----------
+  let simTime = 0;   // simulation seconds
+  let lastMs = performance.now();
+
+  // Reusable buffers
+  const projX = new Float32Array(N);
+  const projY = new Float32Array(N);
+  const projZ = new Float32Array(N);   // camera-space z (positive = toward camera)
+  const projS = new Float32Array(N);   // pixel size
+  const visible = new Uint8Array(N);
+  const behind  = new Uint8Array(N);   // 1 = behind earth from cam
+
+  function render(dt) {
+    simTime += dt * TIME_SPEED;
+    if (autoSpin) cam.yaw += dt * 0.06;
+    earthSpin += dt * TIME_SPEED * 0.0004;   // slower than sat motion for legibility
+    moonPhase += dt * TIME_SPEED * 0.0001;
+
+    // Camera transform: rotate world by -yaw about Y, then -pitch about X
+    const cy = Math.cos(-cam.yaw),  sy = Math.sin(-cam.yaw);
+    const cp = Math.cos(-cam.pitch), sp = Math.sin(-cam.pitch);
+    // Combined R = Rx(-pitch) * Ry(-yaw)
+    // R * (x,y,z) = (
+    //   cy*x + sy*z,
+    //   sp*sy*x + cp*y - sp*cy*z,       // hmm careful — recompute
+    //   ...
+    // )
+    // Do it explicitly per point below.
+
+    const D = cam.dist;                  // camera at (0,0,D) after rotating world
+    const focal = (H * DPR * 0.5) / Math.tan(cam.fov * 0.5);
+    const cx = W * DPR * 0.5, cyPix = H * DPR * 0.5;
+
+    // ---- Background void ----
+    ctx.fillStyle = '#04060c';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // ---- Subtle vignette ring for depth ----
+    const bgGrad = ctx.createRadialGradient(cx, cyPix, Math.min(cx, cyPix) * 0.2, cx, cyPix, Math.max(cx, cyPix));
+    bgGrad.addColorStop(0, 'rgba(20,32,56,0.35)');
+    bgGrad.addColorStop(1, 'rgba(2,3,10,0)');
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // ---- Stars (fixed sky, not rotating with world for calm) ----
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < STARS.length; i++) {
+      const s = STARS[i];
+      const px = (s.x * 0.5 + 0.5) * canvas.width;
+      const py = (s.y * 0.5 + 0.5) * canvas.height;
+      const tw = 0.65 + 0.35 * Math.sin(s.t + simTime * 0.6);
+      const alpha = (0.15 + s.m * 0.85) * tw;
+      ctx.fillStyle = `rgba(220,232,255,${alpha.toFixed(3)})`;
+      const sz = (0.6 + s.m * 1.8) * DPR;
+      ctx.fillRect(px - sz * 0.5, py - sz * 0.5, sz, sz);
+    }
+    ctx.globalCompositeOperation = 'source-over';
+
+    // ---- Compute satellite positions & projection ----
+    // Rotation matrix R = Rx(-pitch) * Ry(-yaw)
+    // r11 = cy         r12 = 0     r13 = sy
+    // r21 = sp*sy      r22 = cp    r23 = -sp*cy
+    // r31 = -cp*sy     r32 = sp    r33 = cp*cy
+    const r11 = cy,      r12 = 0,   r13 = sy;
+    const r21 = sp*sy,   r22 = cp,  r23 = -sp*cy;
+    const r31 = -cp*sy,  r32 = sp,  r33 = cp*cy;
+
+    // Earth center in camera space is origin -> (0,0,0). Distance from camera = D.
+    // Camera space: viewer looks toward -z (world moved so camera at (0,0,0), Earth at (0,0,-D))
+    // We'll compute pworld -> pcam via: pcam.x = r11*x+r12*y+r13*z, etc, then pcam.z' = -D + rotZ
+    // Actually simplest: we compute rotated world coords (rx,ry,rz), then camera at (0,0,D) looking -z direction? Let's define:
+    //   viewZ = D - rz   (distance in front of camera; larger = further away)
+    //   screenX = focal * rx / viewZ + cx
+    //   screenY = focal * -ry / viewZ + cyPix   (invert Y)
+    // Occlusion test: if viewZ > D (i.e., rz < 0, on far side of earth) AND sqrt(rx²+ry²) < R_earth -> behind
+    // We'll skip if viewZ <= 0.1 (behind camera).
+
+    const R2_EARTH = 1.001 * 1.001;
+
+    for (let i = 0; i < N; i++) {
+      const a = A[i];
+      const M = M0[i] + NRATE[i] * simTime;
+      const cosM = Math.cos(M), sinM = Math.sin(M);
+      // Position in orbital frame (perifocal), circular: x' = a*cosM, y' = a*sinM, z' = 0
+      // Rotate by inclination about x-axis: (x', y'*ci, y'*si)
+      // Then by RAAN about z-axis:
+      //   x = cr*x' - sr*(y'*ci)
+      //   y = sr*x' + cr*(y'*ci)
+      //   z = y'*si
+      const xo = a * cosM;
+      const yo = a * sinM;
+      const ci = CI[i], si = SI[i], cr = CR[i], sr = SR[i];
+      const wx = cr * xo - sr * yo * ci;
+      const wy = sr * xo + cr * yo * ci;
+      const wz = yo * si;
+
+      // Camera transform
+      const rx = r11 * wx + r12 * wy + r13 * wz;
+      const ry = r21 * wx + r22 * wy + r23 * wz;
+      const rz = r31 * wx + r32 * wy + r33 * wz;
+      const viewZ = D - rz;
+
+      if (viewZ < 0.1) { visible[i] = 0; continue; }
+
+      // Earth-occlusion test: point is behind Earth if viewZ > D AND rx²+ry² < 1
+      let occluded = 0;
+      if (viewZ > D && (rx * rx + ry * ry) < R2_EARTH) occluded = 1;
+      behind[i] = (viewZ > D) ? 1 : 0;
+
+      const sx = focal * rx / viewZ + cx;
+      const sy2 = -focal * ry / viewZ + cyPix;
+
+      // Reject offscreen with margin
+      const marg = 20 * DPR;
+      if (sx < -marg || sx > canvas.width + marg || sy2 < -marg || sy2 > canvas.height + marg) {
+        visible[i] = 0; continue;
+      }
+
+      if (occluded) { visible[i] = 0; continue; }
+
+      // Point size: base * DPR, scaled by focal/viewZ so closer sats are bigger
+      const scale = (focal / viewZ) * (1 / 250);
+      let sz = SIZE[i] * (exaggerate ? 3.4 : 1.6) * (0.7 + scale * 4);
+      if (BRIGHT[i]) sz *= 1.7;
+      // clamp
+      if (sz < 0.6) sz = 0.6;
+      if (sz > 6.0) sz = 6.0;
+
+      projX[i] = sx;
+      projY[i] = sy2;
+      projZ[i] = viewZ;
+      projS[i] = sz * DPR;
+      visible[i] = 1;
+    }
+
+    // ---- Draw FAR-side satellites (behind Earth plane) additively ----
+    ctx.globalCompositeOperation = 'lighter';
+    drawSats(true);
+    ctx.globalCompositeOperation = 'source-over';
+
+    // ---- Draw Earth ----
+    drawEarth(r11, r12, r13, r21, r22, r23, r31, r32, r33, D, focal, cx, cyPix);
+
+    // ---- Draw NEAR-side satellites additively ----
+    ctx.globalCompositeOperation = 'lighter';
+    drawSats(false);
+
+    // ---- Moon ----
+    drawMoon(r11, r12, r13, r21, r22, r23, r31, r32, r33, D, focal, cx, cyPix);
+
+    ctx.globalCompositeOperation = 'source-over';
+
+    // ---- Readout ----
+    updateReadout();
+  }
+
+  function drawSats(farSide) {
+    // Iterate buckets to minimize fillStyle changes
+    for (const c in colorBuckets) {
+      const idxs = colorBuckets[c];
+      ctx.fillStyle = c;
+      for (let k = 0; k < idxs.length; k++) {
+        const i = idxs[k];
+        if (!visible[i]) continue;
+        if (farSide ? !behind[i] : behind[i]) continue;
+        const sz = projS[i];
+        const x = projX[i] - sz * 0.5;
+        const y = projY[i] - sz * 0.5;
+        ctx.fillRect(x, y, sz, sz);
+        // Bloom for bright objects
+        if (BRIGHT[i]) {
+          ctx.fillRect(x - sz*0.7, y + sz*0.15, sz*2.4, sz*0.7);
+          ctx.fillRect(x + sz*0.15, y - sz*0.7, sz*0.7, sz*2.4);
+        }
+      }
+    }
+  }
+
+  function drawEarth(r11, r12, r13, r21, r22, r23, r31, r32, r33, D, focal, cx, cyPix) {
+    // Earth center in camera view = (0,0,0) world -> (0,0,0) view; distance = D
+    const rPix = focal * 1.0 / D;
+
+    // Atmosphere halo (outer soft glow)
+    const haloR = rPix * 1.28;
+    const halo = ctx.createRadialGradient(cx, cyPix, rPix * 0.98, cx, cyPix, haloR);
+    halo.addColorStop(0.00, 'rgba(120,190,255,0.55)');
+    halo.addColorStop(0.35, 'rgba(80,150,235,0.18)');
+    halo.addColorStop(1.00, 'rgba(40,90,180,0)');
+    ctx.fillStyle = halo;
+    ctx.beginPath();
+    ctx.arc(cx, cyPix, haloR, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Sun direction in world (fixed)
+    const sun = { x: 0.7, y: 0.25, z: 0.66 }; // normalized-ish
+    // Transform sun into camera-view frame
+    const sxCam = r11*sun.x + r12*sun.y + r13*sun.z;
+    const syCam = r21*sun.x + r22*sun.y + r23*sun.z;
+    const szCam = r31*sun.x + r32*sun.y + r33*sun.z;
+
+    // Base globe: dark limb, deep-ocean interior. Offset gradient center toward sun to fake terminator.
+    const litOffX = sxCam * rPix * 0.42;
+    const litOffY = -syCam * rPix * 0.42;
+    const base = ctx.createRadialGradient(
+      cx + litOffX, cyPix + litOffY, rPix * 0.1,
+      cx, cyPix, rPix * 1.02
+    );
+    base.addColorStop(0.00, '#2a4a76');
+    base.addColorStop(0.35, '#1a3358');
+    base.addColorStop(0.75, '#0b1c38');
+    base.addColorStop(1.00, '#050a18');
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cyPix, rPix, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.fillStyle = base;
+    ctx.fillRect(cx - rPix, cyPix - rPix, rPix * 2, rPix * 2);
+
+    // Continents — draw dark blobs on day side
+    // Apply Earth spin around Y
+    const es = earthSpin;
+    const cesY = Math.cos(es), sesY = Math.sin(es);
+
+    ctx.fillStyle = 'rgba(24,44,32,0.55)';
+    for (let i = 0; i < LAND_BLOBS.length; i++) {
+      const b = LAND_BLOBS[i];
+      // spin around Y
+      const x1 = cesY * b.x0 + sesY * b.z0;
+      const y1 = b.y0;
+      const z1 = -sesY * b.x0 + cesY * b.z0;
+      // camera transform
+      const rx = r11*x1 + r12*y1 + r13*z1;
+      const ry = r21*x1 + r22*y1 + r23*z1;
+      const rz = r31*x1 + r32*y1 + r33*z1;
+      // Visible if rz > 0 (facing camera)
+      if (rz <= 0) continue;
+      // Day/night: dot with sun (in view space)
+      const dotSun = rx*sxCam + ry*syCam + rz*szCam;
+      if (dotSun < -0.1) continue; // only day side (with softness)
+      const dayness = Math.min(1, Math.max(0, dotSun + 0.15));
+      const sxp = cx + (focal * rx / (D - rz));
+      const syp = cyPix + (-focal * ry / (D - rz));
+      const rr = b.r * rPix * (0.9 + rz * 0.2);
+      ctx.globalAlpha = 0.35 * dayness;
+      ctx.beginPath();
+      ctx.arc(sxp, syp, rr, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // Terminator soft shadow: overlay a radial gradient offset opposite to sun
+    const shade = ctx.createRadialGradient(
+      cx - litOffX * 1.6, cyPix - litOffY * 1.6, rPix * 0.1,
+      cx - litOffX * 1.6, cyPix - litOffY * 1.6, rPix * 1.6
+    );
+    shade.addColorStop(0.00, 'rgba(0,0,0,0.85)');
+    shade.addColorStop(0.55, 'rgba(0,0,0,0.55)');
+    shade.addColorStop(1.00, 'rgba(0,0,0,0)');
+    ctx.fillStyle = shade;
+    ctx.fillRect(cx - rPix, cyPix - rPix, rPix * 2, rPix * 2);
+
+    // City lights on night side
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < CITIES.length; i++) {
+      const c = CITIES[i];
+      const x1 = cesY * c.x0 + sesY * c.z0;
+      const y1 = c.y0;
+      const z1 = -sesY * c.x0 + cesY * c.z0;
+      const rx = r11*x1 + r12*y1 + r13*z1;
+      const ry = r21*x1 + r22*y1 + r23*z1;
+      const rz = r31*x1 + r32*y1 + r33*z1;
+      if (rz <= 0) continue;
+      const dotSun = rx*sxCam + ry*syCam + rz*szCam;
+      if (dotSun > 0.05) continue; // night side only
+      const nightness = Math.min(1, -dotSun + 0.05);
+      const sxp = cx + (focal * rx / (D - rz));
+      const syp = cyPix + (-focal * ry / (D - rz));
+      const a = 0.55 * nightness * c.i;
+      ctx.fillStyle = `rgba(255,190,110,${a.toFixed(3)})`;
+      ctx.fillRect(sxp - DPR*0.5, syp - DPR*0.5, DPR, DPR);
+    }
+    ctx.globalCompositeOperation = 'source-over';
+
+    ctx.restore();
+
+    // Thin limb highlight ring
+    ctx.beginPath();
+    ctx.arc(cx, cyPix, rPix + 0.5, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(140,200,255,0.15)';
+    ctx.lineWidth = 1 * DPR;
+    ctx.stroke();
+  }
+
+  function drawMoon(r11, r12, r13, r21, r22, r23, r31, r32, r33, D, focal, cx, cyPix) {
+    // Moon position: orbit in a plane inclined 5° from equator
+    const mp = moonPhase;
+    const inc = 5.14 * DEG;
+    const raan = 0.7;
+    const cM = Math.cos(mp), sM = Math.sin(mp);
+    const ci = Math.cos(inc), si = Math.sin(inc);
+    const cr = Math.cos(raan), sr = Math.sin(raan);
+    const xo = MOON_DIST_VIS * cM;
+    const yo = MOON_DIST_VIS * sM;
+    const wx = cr * xo - sr * yo * ci;
+    const wy = sr * xo + cr * yo * ci;
+    const wz = yo * si;
+
+    const rx = r11*wx + r12*wy + r13*wz;
+    const ry = r21*wx + r22*wy + r23*wz;
+    const rz = r31*wx + r32*wy + r33*wz;
+    const viewZ = D - rz;
+    if (viewZ < 0.1) return;
+
+    const sxp = cx + focal * rx / viewZ;
+    const syp = cyPix - focal * ry / viewZ;
+    const rPix = focal * MOON_RADIUS / viewZ;
+
+    // Sun for moon shading
+    const sun = { x: 0.7, y: 0.25, z: 0.66 };
+    const sxCam = r11*sun.x + r12*sun.y + r13*sun.z;
+    const syCam = r21*sun.x + r22*sun.y + r23*sun.z;
+    // The lit direction (projected): opposite of sun offset from moon center
+    const litX = sxCam * rPix * 0.45;
+    const litY = -syCam * rPix * 0.45;
+
+    // Soft moon halo
+    const halo = ctx.createRadialGradient(sxp, syp, rPix, sxp, syp, rPix * 3);
+    halo.addColorStop(0, 'rgba(210,210,220,0.14)');
+    halo.addColorStop(1, 'rgba(210,210,220,0)');
+    ctx.fillStyle = halo;
+    ctx.beginPath();
+    ctx.arc(sxp, syp, rPix * 3, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Moon body
+    const body = ctx.createRadialGradient(
+      sxp + litX, syp + litY, rPix * 0.05,
+      sxp, syp, rPix * 1.02
+    );
+    body.addColorStop(0, '#d8d3c8');
+    body.addColorStop(0.6, '#7f7a70');
+    body.addColorStop(1, '#1a1815');
+    ctx.fillStyle = body;
+    ctx.beginPath();
+    ctx.arc(sxp, syp, rPix, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Terminator shading
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(sxp, syp, rPix, 0, Math.PI * 2);
+    ctx.clip();
+    const shade = ctx.createRadialGradient(
+      sxp - litX * 1.5, syp - litY * 1.5, rPix * 0.05,
+      sxp - litX * 1.5, syp - litY * 1.5, rPix * 1.6
+    );
+    shade.addColorStop(0, 'rgba(0,0,0,0.9)');
+    shade.addColorStop(0.6, 'rgba(0,0,0,0.5)');
+    shade.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = shade;
+    ctx.fillRect(sxp - rPix, syp - rPix, rPix * 2, rPix * 2);
+    ctx.restore();
+
+    // Label
+    if (rPix > 2) {
+      ctx.font = `${10 * DPR}px ${'JetBrains Mono, SF Mono, Menlo, Consolas, monospace'}`;
+      ctx.fillStyle = 'rgba(200,210,230,0.55)';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      const lx = sxp + rPix + 8 * DPR;
+      const ly = syp;
+      ctx.fillText('MOON', lx, ly);
+      // hairline connector
+      ctx.strokeStyle = 'rgba(200,210,230,0.25)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(sxp + rPix + 1, syp);
+      ctx.lineTo(lx - 3, ly);
+      ctx.stroke();
+    }
+  }
+
+  function updateReadout() {
+    // Simulated epoch: start = 2026-08-12T00:00 UTC, advance by simTime seconds
+    const epoch0 = Date.UTC(2026, 7, 12, 0, 0, 0);
+    const d = new Date(epoch0 + simTime * 1000);
+    const iso = d.toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
+    document.getElementById('r-epoch').textContent = iso;
+    document.getElementById('r-speed').textContent = TIME_SPEEDS[speedIdx].label;
+  }
+
+  // ---------- Loop ----------
+  function frame(nowMs) {
+    const dt = Math.min(0.05, (nowMs - lastMs) / 1000);
+    lastMs = nowMs;
+    render(dt);
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
