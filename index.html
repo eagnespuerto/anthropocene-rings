@@ -297,33 +297,36 @@
   const MOON_DIST_VIS  = 20;                    // compressed for framing
   const MOON_RADIUS    = 0.273;                 // Earth radii
 
-  // Sun — direction fixed in world; declination + prime-meridian anchor from current UTC.
+  // Sun & Earth orientation, anchored to real UTC and refreshed every frame.
   // World convention: +x = subsolar meridian at UTC noon, +y = north pole, +z = 90°E.
   const DEG = Math.PI / 180;
-  const NOW_UTC = new Date();
-  const UTC_HOURS = NOW_UTC.getUTCHours() + NOW_UTC.getUTCMinutes()/60 + NOW_UTC.getUTCSeconds()/3600;
-  const UTC_DOY = (() => {
+  const SUN = { x: 1, y: 0, z: 0 };  // mutated by updateUtcState()
+  const SUN_DIST   = 300;
+  const SUN_RADIUS = 3.5;
+  let NOW_UTC        = new Date();
+  let UTC_HOURS      = 12;
+  let UTC_DOY        = 1;
+  let SOLAR_DECL     = 0;
+  let SUBSOLAR_LON   = 0;
+  let EARTH_SPIN_UTC = 0;
+
+  function updateUtcState() {
+    NOW_UTC = new Date();
+    UTC_HOURS = NOW_UTC.getUTCHours() + NOW_UTC.getUTCMinutes()/60
+              + NOW_UTC.getUTCSeconds()/3600 + NOW_UTC.getUTCMilliseconds()/3600000;
     const y0 = Date.UTC(NOW_UTC.getUTCFullYear(), 0, 0);
-    return Math.floor((NOW_UTC.getTime() - y0) / 86400000);
-  })();
-  const SOLAR_DECL = 23.44 * DEG * Math.sin(2 * Math.PI * (UTC_DOY - 81) / 365);
-  const SUN = {
-    x: Math.cos(SOLAR_DECL),
-    y: Math.sin(SOLAR_DECL),
-    z: 0,
-  };
-  const SUN_DIST   = 300;   // far background
-  const SUN_RADIUS = 3.5;   // gives ~1.3° angular size — moon-sized, feels right
-  // Earth spin: prime meridian at +x world when UTC noon.
-  // earthSpin_utc(t) = -(UTC_h - 12) * π/12
-  const EARTH_SPIN_UTC = -(UTC_HOURS - 12) * Math.PI / 12;
-  // Subsolar geographic longitude (for readout only): 180 - 15*UTC_h, wrapped to (-180,180]
-  const SUBSOLAR_LON = (() => {
+    UTC_DOY = Math.floor((NOW_UTC.getTime() - y0) / 86400000);
+    SOLAR_DECL = 23.44 * DEG * Math.sin(2 * Math.PI * (UTC_DOY - 81) / 365);
+    SUN.x = Math.cos(SOLAR_DECL);
+    SUN.y = Math.sin(SOLAR_DECL);
+    SUN.z = 0;
+    EARTH_SPIN_UTC = -(UTC_HOURS - 12) * Math.PI / 12;
     let l = 180 - 15 * UTC_HOURS;
     while (l > 180)  l -= 360;
     while (l <= -180) l += 360;
-    return l;
-  })();
+    SUBSOLAR_LON = l;
+  }
+  updateUtcState();  // seed before any consumer reads these
 
   // Kepler rate: n = k / a^(3/2). Choose k so LEO (a≈1.09) does ~1 rev per second at speed=1
   // We'll scale globally by TIME_SPEED so the sim feels ~×450 real time.
@@ -755,7 +758,8 @@
   function render(dt) {
     simTime += dt * TIME_SPEED;
     if (autoSpin) cam.yaw += dt * 0.06;
-    earthSpin += dt * TIME_SPEED * 24;       // ~full rotation per 2 min wall clock at default
+    updateUtcState();                        // refresh sun & Earth orientation from real UTC
+    earthSpin = EARTH_SPIN_UTC;              // Earth stays true to UTC (~15°/hr terminator drift)
     moonPhase += dt * TIME_SPEED * 0.8;      // moon completes an orbit at a legible pace
 
     // Camera transform: rotate world by -yaw about Y, then -pitch about X
@@ -864,6 +868,11 @@
       const scale = (focal / viewZ) * (1 / 250);
       let sz = SIZE[i] * (exaggerate ? 3.4 : 1.6) * (0.7 + scale * 4);
       if (BRIGHT[i]) sz *= 1.7;
+      // Slight dim on Earth's night side — satellites reflect sunlight.
+      // litDot = normalized sat position · sun direction; in [-1, 1].
+      const litDot = (wx * SUN.x + wy * SUN.y + wz * SUN.z) / a;
+      const litFactor = 0.86 + 0.14 * (litDot < -1 ? -1 : litDot > 1 ? 1 : litDot);
+      sz *= litFactor;
       // clamp
       if (sz < 0.6) sz = 0.6;
       if (sz > 6.0) sz = 6.0;
@@ -1173,9 +1182,8 @@
   }
 
   function updateReadout() {
-    // Epoch starts at page-load UTC and advances by simTime seconds.
-    const d = new Date(NOW_UTC.getTime() + simTime * 1000);
-    const iso = d.toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
+    // NOW_UTC is refreshed every frame by updateUtcState() — displays live wall-clock UTC.
+    const iso = NOW_UTC.toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
     document.getElementById('r-epoch').textContent = iso;
     document.getElementById('r-speed').textContent = TIME_SPEEDS[speedIdx].label;
     const el = document.getElementById('r-sun');
