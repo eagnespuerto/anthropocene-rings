@@ -29,6 +29,28 @@
     --display: 'Didot','Bodoni 72','GT Sectra','Playfair Display',Georgia,'Times New Roman',serif;
     --sans:    -apple-system,'Segoe UI','Helvetica Neue',Helvetica,Arial,sans-serif;
     --mono:    'JetBrains Mono','SF Mono','IBM Plex Mono','Menlo',Consolas,monospace;
+
+    /* Chrome type scale — switched by :root.ui-lg */
+    --fs-title:       clamp(22px, 2.4vw, 34px);
+    --fs-caption:     14px;
+    --fs-mono-xs:     10px;
+    --fs-legend-name: 12px;
+    --fs-legend-alt:  10.5px;
+    --fs-legend-cnt:  11px;
+    --fs-btn:         10.5px;
+    --fs-readout:     10.5px;
+    --hint-fs:        10px;
+  }
+  :root.ui-lg {
+    --fs-title:       clamp(30px, 3.2vw, 46px);
+    --fs-caption:     17px;
+    --fs-mono-xs:     12.5px;
+    --fs-legend-name: 14.5px;
+    --fs-legend-alt:  12.5px;
+    --fs-legend-cnt:  13.5px;
+    --fs-btn:         12.5px;
+    --fs-readout:     12.5px;
+    --hint-fs:        12px;
   }
 
   html, body {
@@ -52,39 +74,44 @@
   .chrome { position: fixed; z-index: 5; pointer-events: none; }
   .chrome > * { pointer-events: auto; }
 
-  .plate-title {
-    top: 22px; left: 28px; right: 28px;
-    display: flex; align-items: baseline; gap: 18px;
+  .plate-block {
+    top: 22px; left: 28px;
+    max-width: min(560px, 44vw);
     letter-spacing: .02em;
   }
-  .plate-title h1 {
+  .plate-block .eyebrow {
+    font-family: var(--mono);
+    font-size: var(--fs-mono-xs);
+    letter-spacing: .22em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+    margin: 0 0 8px;
+    font-variant-numeric: tabular-nums;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .plate-block .eyebrow .bar {
+    height: 1px; width: 32px; background: var(--hairline-2);
+  }
+  .plate-block h1 {
     font-family: var(--display);
     font-weight: 400;
-    font-size: clamp(22px, 2.4vw, 34px);
-    margin: 0;
+    font-size: var(--fs-title);
+    margin: 0 0 10px;
     letter-spacing: .01em;
     color: var(--ink);
+    line-height: 1.05;
   }
-  .plate-title h1 em {
+  .plate-block h1 em {
     font-style: italic; color: var(--brass); font-weight: 400;
   }
-  .plate-title .rule {
-    flex: 1; height: 1px; background: var(--hairline-2);
-    margin: 0 6px; align-self: center;
-  }
-  .plate-title .meta {
-    font-family: var(--mono);
-    font-size: 10.5px; letter-spacing: .18em; text-transform: uppercase;
-    color: var(--ink-dim);
-    font-variant-numeric: tabular-nums;
-  }
-
-  .caption {
-    position: fixed; top: 62px; left: 28px; z-index: 5;
+  .plate-block .caption {
     font-family: var(--display); font-style: italic;
-    font-size: 14px; color: var(--ink-dim);
-    max-width: 46ch; line-height: 1.5;
+    font-size: var(--fs-caption);
+    color: var(--ink-dim);
+    max-width: 46ch;
+    line-height: 1.5;
     letter-spacing: .005em;
+    margin: 0;
   }
 
   /* Bottom-left legend */
@@ -101,14 +128,14 @@
   .legend h2 {
     margin: 0 0 10px;
     font-family: var(--mono);
-    font-size: 10px; letter-spacing: .22em; text-transform: uppercase;
+    font-size: var(--fs-mono-xs); letter-spacing: .22em; text-transform: uppercase;
     color: var(--ink-dim); font-weight: 500;
   }
   .legend .row {
     display: grid; grid-template-columns: 12px 1fr auto auto;
     gap: 10px; align-items: baseline;
     padding: 3px 0;
-    font-size: 12px;
+    font-size: var(--fs-legend-name);
   }
   .legend .row + .row { border-top: 1px dotted rgba(255,255,255,.05); }
   .legend .swatch {
@@ -116,14 +143,14 @@
     align-self: center; box-shadow: 0 0 6px currentColor;
   }
   .legend .name { color: var(--ink); letter-spacing: .01em; }
-  .legend .alt  { font-family: var(--mono); font-size: 10.5px; color: var(--ink-mute); font-variant-numeric: tabular-nums; }
-  .legend .count{ font-family: var(--mono); font-size: 11px; color: var(--ink-dim); font-variant-numeric: tabular-nums; min-width: 5ch; text-align: right; }
+  .legend .alt  { font-family: var(--mono); font-size: var(--fs-legend-alt); color: var(--ink-mute); font-variant-numeric: tabular-nums; }
+  .legend .count{ font-family: var(--mono); font-size: var(--fs-legend-cnt); color: var(--ink-dim); font-variant-numeric: tabular-nums; min-width: 5ch; text-align: right; }
 
   .legend .footer {
     margin-top: 10px; padding-top: 8px;
     border-top: 1px solid var(--hairline);
     display: flex; justify-content: space-between;
-    font-family: var(--mono); font-size: 10px;
+    font-family: var(--mono); font-size: var(--fs-mono-xs);
     letter-spacing: .16em; text-transform: uppercase;
     color: var(--ink-mute);
   }
@@ -137,7 +164,7 @@
   }
   .btn {
     font-family: var(--mono);
-    font-size: 10.5px; letter-spacing: .18em; text-transform: uppercase;
+    font-size: var(--fs-btn); letter-spacing: .18em; text-transform: uppercase;
     color: var(--ink-dim);
     background: rgba(10,17,32,.72);
     border: 1px solid var(--hairline);
@@ -156,10 +183,11 @@
     position: fixed; right: 28px; top: 22px; z-index: 5;
     text-align: right;
     font-family: var(--mono);
-    font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase;
+    font-size: var(--fs-readout); letter-spacing: .12em; text-transform: uppercase;
     color: var(--ink-dim);
     line-height: 1.7;
     font-variant-numeric: tabular-nums;
+    max-width: 40vw;
   }
   .readout .k { color: var(--ink-mute); margin-right: 8px; }
   .readout .v { color: var(--ink); }
@@ -177,7 +205,7 @@
   .hint {
     position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%);
     z-index: 5;
-    font-family: var(--mono); font-size: 10px; letter-spacing: .22em;
+    font-family: var(--mono); font-size: var(--hint-fs); letter-spacing: .22em;
     text-transform: uppercase; color: var(--ink-mute);
     opacity: 1; transition: opacity 1.2s ease 2s;
     pointer-events: none;
@@ -185,10 +213,9 @@
   .hint.faded { opacity: 0; }
 
   @media (max-width: 720px) {
-    .plate-title { top: 16px; left: 18px; right: 18px; }
-    .caption { top: 54px; left: 18px; font-size: 13px; }
+    .plate-block { top: 16px; left: 18px; max-width: calc(100vw - 36px); }
     .legend { left: 14px; right: 14px; bottom: 14px; min-width: 0; }
-    .controls { right: 14px; bottom: auto; top: 60px; }
+    .controls { right: 14px; bottom: 14px; top: auto; flex-direction: row; flex-wrap: wrap; }
     .readout { display: none; }
   }
 </style>
@@ -203,15 +230,18 @@
 <div class="corner bl"></div>
 <div class="corner br"></div>
 
-<div class="chrome plate-title">
+<div class="chrome plate-block">
+  <div class="eyebrow">
+    <span>Plate I</span>
+    <span class="bar"></span>
+    <span>Rev 2026.08</span>
+  </div>
   <h1>Anthropocene <em>Rings</em></h1>
-  <span class="rule"></span>
-  <span class="meta">Plate I &nbsp;·&nbsp; Rev 2026.08</span>
-</div>
-<div class="caption">
-  A live simulation of the metal we have accreted about the Earth &mdash;
-  fourteen thousand catalogued satellites and fragments, sorted by shell,
-  drawn slightly larger than life so the rings resolve.
+  <p class="caption">
+    A live simulation of the metal we have accreted about the Earth &mdash;
+    fourteen thousand catalogued satellites and fragments, sorted by shell,
+    drawn slightly larger than life so the rings resolve.
+  </p>
 </div>
 
 <div class="chrome readout" id="readout">
@@ -233,6 +263,7 @@
   <button class="btn on" id="btn-exagg" title="Enlarge points">Exaggerate <kbd>E</kbd></button>
   <button class="btn on" id="btn-spin"  title="Auto-rotate">Auto-orbit <kbd>Space</kbd></button>
   <button class="btn"    id="btn-time"  title="Time acceleration">Time ×450 <kbd>T</kbd></button>
+  <button class="btn"    id="btn-size"  title="Larger UI text">Text A→A+ <kbd>F</kbd></button>
   <button class="btn"    id="btn-reset" title="Reset view">Reset view <kbd>R</kbd></button>
 </div>
 
@@ -561,6 +592,7 @@
   const btnExagg = document.getElementById('btn-exagg');
   const btnSpin  = document.getElementById('btn-spin');
   const btnTime  = document.getElementById('btn-time');
+  const btnSize  = document.getElementById('btn-size');
   const btnReset = document.getElementById('btn-reset');
 
   btnExagg.addEventListener('click', () => { exaggerate = !exaggerate; btnExagg.classList.toggle('on', exaggerate); });
@@ -572,6 +604,11 @@
     btnTime.appendChild(Object.assign(document.createElement('kbd'), { textContent: 'T' }));
     document.getElementById('r-speed').textContent = TIME_SPEEDS[speedIdx].label;
   });
+  btnSize.addEventListener('click', () => {
+    const big = document.documentElement.classList.toggle('ui-lg');
+    btnSize.classList.toggle('on', big);
+    btnSize.firstChild.nodeValue = big ? 'Text A+→A ' : 'Text A→A+ ';
+  });
   btnReset.addEventListener('click', () => {
     cam.yaw = -0.6; cam.pitch = 0.35; cam.dist = 32;
     autoSpin = true; syncSpinBtn();
@@ -582,6 +619,7 @@
     if (e.key === 'e' || e.key === 'E') btnExagg.click();
     if (e.key === ' ') { e.preventDefault(); btnSpin.click(); }
     if (e.key === 't' || e.key === 'T') btnTime.click();
+    if (e.key === 'f' || e.key === 'F') btnSize.click();
     if (e.key === 'r' || e.key === 'R') btnReset.click();
   });
 
