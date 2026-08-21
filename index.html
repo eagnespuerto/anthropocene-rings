@@ -891,9 +891,11 @@
       const xo = a * cosM;
       const yo = a * sinM;
       const ci = CI[i], si = SI[i], cr = CR[i], sr = SR[i];
+      // Orbit in y=north world convention: equatorial plane is x–z (horizontal),
+      // orbital pole for inc=0 is +y. Swap of former wy/wz from the z=north form.
       const wx = cr * xo - sr * yo * ci;
-      const wy = sr * xo + cr * yo * ci;
-      const wz = yo * si;
+      const wy = yo * si;
+      const wz = sr * xo + cr * yo * ci;
 
       // Camera transform
       const rx = r11 * wx + r12 * wy + r13 * wz;
