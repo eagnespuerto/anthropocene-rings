@@ -306,7 +306,7 @@
   const SUN_DIST   = 300;
   const SUN_RADIUS = 3.5;
   // MOON.x/y/z carry the moon's world-frame position (scaled to MOON_DIST_VIS)
-  const MOON = { x: 0, y: 0, z: MOON_DIST_VIS, dist_km: 384400, elong_deg: 0, illum: 0.5, waxing: true };
+  const MOON = { x: 0, y: 0, z: MOON_DIST_VIS, dist_km: 384400, elong_deg: 0, illum: 0.5, waxing: true, decl_deg: 0 };
   let NOW_UTC        = new Date();
   let UTC_HOURS      = 12;
   let UTC_DOY        = 1;
@@ -373,6 +373,7 @@
     MOON.y = distScale * Math.sin(deltaMoon);
     MOON.z = distScale * Math.sin(dAlpha) * cosDM;
     MOON.dist_km = rMoonKm;
+    MOON.decl_deg = deltaMoon / DEG;
 
     // Elongation & phase (moon-sun angle as seen from Earth)
     let elong = (lambdaMoon - lambdaSun);
@@ -1265,7 +1266,9 @@
     if (elM) {
       const pct = Math.round(MOON.illum * 100);
       const dir = MOON.waxing ? 'wax' : 'wan';
-      elM.textContent = `${pct}% ${dir}`;
+      const dm = MOON.decl_deg;
+      const hem = dm >= 0 ? 'N' : 'S';
+      elM.textContent = `${pct}% ${dir} · ${Math.abs(dm).toFixed(1)}°${hem}`;
     }
   }
 
